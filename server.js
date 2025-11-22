@@ -5,7 +5,7 @@ const cheerio = require('cheerio');
 const app = express();
 app.use(express.json());
 
-const SAWERIA_USER = process.env.ShiShiSUPERCLUB;
+const SAWERIA_USER = process.env.SAWERIA_USERNAME;
 const ROBLOX_URL = process.env.ROBLOX_WEBHOOK_URL;
 const INTERVAL = parseInt(process.env.POLLING_INTERVAL) || 30000;
 
@@ -43,3 +43,4 @@ setInterval(checkDonation, INTERVAL);
 app.get('/health', (req, res) => res.send('OK'));
 
 app.listen(process.env.PORT || 3000, () => console.log('🟢 Jalan!'));
+
