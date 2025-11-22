@@ -1,79 +1,62 @@
+// server.js
 const express = require('express');
 const axios = require('axios');
-const cheerio = require('cheerio');
-
 const app = express();
 
-const SAWERIA_USER = process.env.SAWERIA_USERNAME || 'ShiShiSUPERCLUB';
-const INTERVAL = parseInt(process.env.POLLING_INTERVAL) || 30000;
+app.use(express.json());
 
-let latestDonation = null;
+// Konfigurasi
+const ROBLOX_API_KEY = "YOUR_ROBLOX_OPEN_CLOUD_API_KEY";
+const UNIVERSE_ID = "8790434428";
+const TOPIC_NAME = "Donation";
 
-async function checkDonation() {
+// Endpoint untuk menerima webhook Saweria
+app.post('/saweria-webhook', async (req, res) => {
     try {
-        console.log("🔍 Memeriksa donasi untuk:", SAWERIA_USER);
-        const { data } = await axios.get(`https://saweria.co/${SAWERIA_USER}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (DonationBot)' },
-            timeout: 10000
-        });
-
-        const $ = cheerio.load(data);
-        const items = $('.donation-item');
-
-        if (items.length === 0) {
-            console.log("ℹ️ Tidak ada donasi ditemukan");
-            return;
-        }
-
-        const first = items.first();
-        const nameEl = first.find('.donation-name');
-        const amountEl = first.find('.donation-amount');
-        const messageEl = first.find('.donation-message');
-
-        const name = nameEl.length ? nameEl.text().trim() : "Anonim";
-        const amountText = amountEl.length ? amountEl.text().trim() : "0";
-        const amount = parseInt(amountText.replace(/\D/g, '')) || 0;
-        const message = messageEl.length ? messageEl.text().trim() : "";
-
-        const id = `${name}-${amount}`;
-        const now = Date.now();
-
-        // Simpan hanya jika benar-benar baru
-        if (!latestDonation || latestDonation.id !== id) {
-            latestDonation = { id, name, amount, message, timestamp: now };
-            console.log(`✅ Donasi baru: ${name} - Rp${amount}`);
-        }
-    } catch (err) {
-        console.error("🚨 Error saat cek donasi:", err.message);
+        const donation = req.body;
+        
+        // Validasi webhook (opsional, sesuaikan dengan Saweria)
+        // if (req.headers['x-saweria-signature'] !== YOUR_SECRET) {
+        //     return res.status(401).send('Unauthorized');
+        // }
+        
+        // Data yang akan dikirim ke Roblox
+        const notifData = {
+            donor_name: donation.donor_name || "Anonymous",
+            amount: donation.amount || 0,
+            message: donation.message || "",
+            timestamp: Date.now()
+        };
+        
+        // Kirim ke Roblox MessagingService
+        await axios.post(
+            `https://apis.roblox.com/messaging-service/v1/universes/${UNIVERSE_ID}/topics/${TOPIC_NAME}`,
+            {
+                message: JSON.stringify(notifData)
+            },
+            {
+                headers: {
+                    'x-api-key': ROBLOX_API_KEY,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        
+        console.log('✅ Donation sent to Roblox:', notifData);
+        res.status(200).send('OK');
+        
+    } catch (error) {
+        console.error('❌ Error:', error.message);
+        res.status(500).send('Error processing webhook');
     }
-}
+});
 
-// Jalankan cek pertama saat start
-checkDonation();
-// Lalu ulangi tiap INTERVAL
-setInterval(checkDonation, INTERVAL);
-
-// Endpoint: cek status
+// Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'OK', lastCheck: latestDonation?.timestamp });
+    res.send('Server is running!');
 });
 
-// Endpoint: ambil donasi terbaru
-app.get('/latest', (req, res) => {
-    if (latestDonation) {
-        res.json({
-            name: latestDonation.name,
-            amount: latestDonation.amount,
-            message: latestDonation.message,
-            timestamp: latestDonation.timestamp
-        });
-    } else {
-        res.status(404).json({ error: "no_donation_yet" });
-    }
-});
-
-// Jalankan server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🟢 Server jalan di port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
